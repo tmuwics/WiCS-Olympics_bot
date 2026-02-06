@@ -1,4 +1,4 @@
-# WiCS-Communication-Bot
+# WiCS-Olympics_bot
 
 This is a Discord bot built for the purpose of the WiCS olympics.
 It has been made to facilitate score counting of the WiCS online events.
