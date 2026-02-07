@@ -52,6 +52,11 @@ class View(discord.ui.View):
 class InfoModal(discord.ui.Modal, title="WiCS Info Form"):
     name = discord.ui.TextInput(label="Name", placeholder="Your name", max_length=100)
     student_email = discord.ui.TextInput(label="Student Email", placeholder="Your student email", max_length=100)
+    Instagram = discord.ui.TextInput(
+        label="Instagram (If you posted on IG)", 
+        placeholder="(Optional)", 
+        max_length=100,
+        required = False)
     location = discord.ui.TextInput(
         label="Where did you find them?",
         style=discord.TextStyle.paragraph,
@@ -73,7 +78,9 @@ class InfoModal(discord.ui.Modal, title="WiCS Info Form"):
             "Name": self.name.value,
             "Student_Email": self.student_email.value,
             "Location": self.location.value,
-            "Points": points
+            "Instagram": self.Instagram.value,
+            "Points": points,
+            "last_updated": datetime.utcnow().isoformat()
             })
 
         await interaction.response.send_message(
