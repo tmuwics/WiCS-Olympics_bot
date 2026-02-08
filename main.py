@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 import os, requests
 import re
 import discord 
@@ -89,6 +89,7 @@ class InfoModal(discord.ui.Modal, title="WiCS Info Form"):
         points = 10
         email = self.student_email.value
         exec_role = self.exec_role.value
+        location = self.location.value
 
         try:
             rows = await find_in_DB_async(email)
@@ -101,7 +102,7 @@ class InfoModal(discord.ui.Modal, title="WiCS Info Form"):
                     )
                     return
 
-                await update_db_async(email, points, exec_role)
+                await update_db_async(email, points, exec_role, location)
 
             else:
                 await sheetdb_append_async({
@@ -111,7 +112,7 @@ class InfoModal(discord.ui.Modal, title="WiCS Info Form"):
                     "Instagram": self.Instagram.value,
                     "Exec_Role": exec_role,
                     "Points": points,
-                    "last_updated": datetime.utcnow().isoformat()
+                    "last_updated": datetime.now(timezone.utc).isoformat()
                 })
 
             await interaction.followup.send(
@@ -146,49 +147,57 @@ def submission_exists(student_email: str, exec_role: str) -> bool:
     Returns True if a submission already exists for this
     (student_email + exec_role), otherwise False.
     """
-    rows = find_in_DB(student_email)
 
-    target_role = normalize(exec_role)
+    rows = find_in_DB(student_email)
+    target = normalize(exec_role)
 
     for row in rows:
-        row_role = normalize(row.get("Exec_Role", ""))
+        existing_roles = [
+            normalize(r)
+            for r in row.get("Exec_Role", "").split(" - ")
+            if r.strip()
+        ]
 
-        if row_role == target_role:
+        if target in existing_roles:
             return True
 
     return False
 
-def update_db(student_email, points_to_add, exec_role):
+def update_db(student_email, points_to_add, exec_role, new_loc):
     rows = find_in_DB(student_email)
     current_points = int(rows[0].get("Points", 0))
     new_total = current_points + points_to_add
-    sheetdb_update_points(student_email, new_total)
-    sheetdb_update_roles(student_email, exec_role)
+    sheetdb_update_user(student_email, new_total, exec_role, new_loc)
     return new_total, False  
 
-async def update_db_async(student_email, points_to_add, exec_role):
-    return await asyncio.to_thread(update_db, student_email, points_to_add, exec_role)
+async def update_db_async(student_email, points_to_add, exec_role, new_loc):
+    return await asyncio.to_thread(update_db, student_email, points_to_add, exec_role, new_loc)
 
 
-def sheetdb_update_roles(student_email, new_role):
+def sheetdb_update_user(student_email, new_points, new_role, new_loc):
     encoded_email = quote(student_email, safe="")
     url = f"{SHEETDB_URL}/Student_Email/{encoded_email}"
 
-    new_entry = find_in_DB(student_email)[0].get("Exec_Role", "") + " - " + new_role
-    payload = {
-        "Exec_Role": new_entry,
-        "last_updated": datetime.utcnow().isoformat()
-    }
-    r = requests.patch(url, json=payload, timeout=10)
-    r.raise_for_status()
+    rows = find_in_DB(student_email)
+    existing_roles = rows[0].get("Exec_Role", "")
+    existing_location = rows[0].get("Location", "")
 
-def sheetdb_update_points(student_email, new_points):
-    encoded_email = quote(student_email, safe="")
-    url = f"{SHEETDB_URL}/Student_Email/{encoded_email}"
+    # avoid duplicate role entries
+    roles = [r.strip() for r in existing_roles.split(" - ") if r.strip()]
+    if new_role not in roles:
+        roles.append(new_role)
+
+    locations = [r.strip() for r in existing_location.split(" - ") if r.strip()]
+    if new_loc not in locations:
+        locations.append(new_loc)
+
     payload = {
+        "Location": " - ".join(locations),
         "Points": new_points,
-        "last_updated": datetime.utcnow().isoformat()
+        "Exec_Role": " - ".join(roles),
+        "last_updated": datetime.now(timezone.utc).isoformat()
     }
+
     r = requests.patch(url, json=payload, timeout=10)
     r.raise_for_status()
 
