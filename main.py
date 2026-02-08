@@ -84,45 +84,51 @@ class InfoModal(discord.ui.Modal, title="WiCS Info Form"):
 
     #submitting the form
     async def on_submit(self, interaction: discord.Interaction):
-        #implement points systems maybe? keeping default 10 points for now
+        await interaction.response.defer(ephemeral=True)
+
         points = 10
+        email = self.student_email.value
+        exec_role = self.exec_role.value
 
-        print(self.student_email.value)
-        
-        #if the student already exists in the databse
-        if len(find_in_DB(self.student_email.value)) > 0: 
-            
-            #Check if student entered the same exec as before
-            if submission_exists(self.student_email.value, self.exec_role.value):
-                await interaction.response.send_message(
-                    f"❌ You've already submitted info for this exec role!",
-                    ephemeral=True
-                )
-                return
-            add_points(self.student_email.value, points)
+        try:
+            rows = await find_in_DB_async(email)
+
+            if len(rows) > 0:
+                if submission_exists(email, exec_role):
+                    await interaction.followup.send(
+                        "❌ You've already submitted info for this exec role!",
+                        ephemeral=True
+                    )
+                    return
+
+                await update_db_async(email, points, exec_role)
+
+            else:
+                await sheetdb_append_async({
+                    "Name": self.name.value,
+                    "Student_Email": email,
+                    "Location": self.location.value,
+                    "Instagram": self.Instagram.value,
+                    "Exec_Role": exec_role,
+                    "Points": points,
+                    "last_updated": datetime.utcnow().isoformat()
+                })
+
+            await interaction.followup.send(
+                f"✅ Saved!\n"
+                f"**Name:** {self.name.value}\n"
+                f"**Student Email:** {self.student_email.value}\n"
+                f"**Location:** {self.location.value}\n"
+                f"**Points:** {points}",
+                ephemeral=True
+            )
 
 
-        #else create a new record
-        else:    
-            sheetdb_append({
-            "Name": self.name.value,
-            "Student_Email": self.student_email.value,
-            "Location": self.location.value,
-            "Instagram": self.Instagram.value,
-            "Exec_Role": self.exec_role.value,
-            "Points": points,
-            "last_updated": datetime.utcnow().isoformat()
-            })
-
-        await interaction.response.send_message(
-            f"✅ Saved!\n"
-            f"**Name:** {self.name.value}\n"
-            f"**Student Email:** {self.student_email.value}\n"
-            f"**Location:** {self.location.value}\n"
-            f"**Points:** {points}",
-            ephemeral=True
-        )
-
+        except Exception as e:
+            await interaction.followup.send(
+                f"🚫 Something went wrong while saving.\n`{e}`",
+                ephemeral=True
+            )
 #check if there is a record in sheets
 def find_in_DB(key: str):
     encoded_key = quote(key, safe="")
@@ -131,6 +137,9 @@ def find_in_DB(key: str):
     r = requests.get(url, timeout=10)
     r.raise_for_status()
     return r.json()
+
+async def find_in_DB_async(key: str):
+    return await asyncio.to_thread(find_in_DB, key)
 
 def submission_exists(student_email: str, exec_role: str) -> bool:
     """
@@ -149,13 +158,29 @@ def submission_exists(student_email: str, exec_role: str) -> bool:
 
     return False
 
-
-def add_points(student_email, points_to_add):
+def update_db(student_email, points_to_add, exec_role):
     rows = find_in_DB(student_email)
     current_points = int(rows[0].get("Points", 0))
     new_total = current_points + points_to_add
     sheetdb_update_points(student_email, new_total)
+    sheetdb_update_roles(student_email, exec_role)
     return new_total, False  
+
+async def update_db_async(student_email, points_to_add, exec_role):
+    return await asyncio.to_thread(update_db, student_email, points_to_add, exec_role)
+
+
+def sheetdb_update_roles(student_email, new_role):
+    encoded_email = quote(student_email, safe="")
+    url = f"{SHEETDB_URL}/Student_Email/{encoded_email}"
+
+    new_entry = find_in_DB(student_email)[0].get("Exec_Role", "") + " - " + new_role
+    payload = {
+        "Exec_Role": new_entry,
+        "last_updated": datetime.utcnow().isoformat()
+    }
+    r = requests.patch(url, json=payload, timeout=10)
+    r.raise_for_status()
 
 def sheetdb_update_points(student_email, new_points):
     encoded_email = quote(student_email, safe="")
@@ -173,6 +198,8 @@ def sheetdb_append(row: dict):
     r = requests.post(SHEETDB_URL, json=payload, timeout=10)
     r.raise_for_status()
     return r.json()
+async def sheetdb_append_async(row: dict):
+    return await asyncio.to_thread(sheetdb_append, row)
 
 #normalize string text
 def normalize(text: str) -> str:
