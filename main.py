@@ -1,13 +1,11 @@
 import asyncio
 from datetime import datetime
 import os, requests
+import re
 import discord 
 from urllib.parse import quote
 from dotenv import load_dotenv 
-
-#for the /slash commands
 from discord.ext import commands
-from discord import ui, app_commands
 
 #loading the .env file
 load_dotenv()
@@ -34,9 +32,17 @@ class Client(commands.Bot):
             return
 
         if message.content.strip() == '#ExecFound':
-            await message.channel.send(f'Hi there {message.author} please reply with your info: ', view=View())
+            await message.channel.send(f'Hi there {message.author} please reply with your info: \n'
+                                       'Note: Please send the photo in a separate message below, thank you <3', 
+                                       view=View())
         await self.process_commands(message)
 
+        for attachment in message.attachments:
+            print("Filename:", attachment.filename)
+            print("URL:", attachment.url)
+            print("Content type:", attachment.content_type)
+
+        #await client.process_commands(message) <-- removed to avoid double handling 6:52pm Feb 7th
 
         #this prints to the terminal
         print(f"Message from {message.author}: {message.content}")
@@ -50,8 +56,20 @@ class View(discord.ui.View):
 
 #creating the modal for the form
 class InfoModal(discord.ui.Modal, title="WiCS Info Form"):
-    name = discord.ui.TextInput(label="Name", placeholder="Your name", max_length=100)
-    student_email = discord.ui.TextInput(label="Student Email", placeholder="Your student email", max_length=100)
+
+    #variables for the form
+    name = discord.ui.TextInput(
+        label="Name", 
+        placeholder="Your name", 
+        max_length=100)
+    student_email = discord.ui.TextInput(
+        label="Student Email", 
+        placeholder="Your student email", 
+        max_length=100)
+    exec_role = discord.ui.TextInput(
+        label="Exec Name & Role (Name, Role)", 
+        placeholder="Eg. Prachi, President", 
+        max_length=100)
     Instagram = discord.ui.TextInput(
         label="Instagram (If you posted on IG)", 
         placeholder="(Optional)", 
@@ -64,13 +82,25 @@ class InfoModal(discord.ui.Modal, title="WiCS Info Form"):
         placeholder="eg. DCC 208, LIB 7th floor, ENG 201, etc."
     )
 
+    #submitting the form
     async def on_submit(self, interaction: discord.Interaction):
         #implement points systems maybe? keeping default 10 points for now
         points = 10
 
-        #append the info to the Google Sheets via SheetDB
-        if len(find_in_DB(student_email=self.student_email.value)) > 0:
+        print(self.student_email.value)
+        
+        #if the student already exists in the databse
+        if len(find_in_DB(self.student_email.value)) > 0: 
+            
+            #Check if student entered the same exec as before
+            if submission_exists(self.student_email.value, self.exec_role.value):
+                await interaction.response.send_message(
+                    f"❌ You've already submitted info for this exec role!",
+                    ephemeral=True
+                )
+                return
             add_points(self.student_email.value, points)
+
 
         #else create a new record
         else:    
@@ -79,6 +109,7 @@ class InfoModal(discord.ui.Modal, title="WiCS Info Form"):
             "Student_Email": self.student_email.value,
             "Location": self.location.value,
             "Instagram": self.Instagram.value,
+            "Exec_Role": self.exec_role.value,
             "Points": points,
             "last_updated": datetime.utcnow().isoformat()
             })
@@ -93,13 +124,31 @@ class InfoModal(discord.ui.Modal, title="WiCS Info Form"):
         )
 
 #check if there is a record in sheets
-def find_in_DB(student_email: str):
-    encoded_email = quote(student_email, safe="")
+def find_in_DB(key: str):
+    encoded_key = quote(key, safe="")
     #prolly change mostof these to a global variable
-    url = f"{SHEETDB_URL}/search?Student_Email={encoded_email}"
+    url = f"{SHEETDB_URL}/search?Student_Email={encoded_key}"
     r = requests.get(url, timeout=10)
     r.raise_for_status()
     return r.json()
+
+def submission_exists(student_email: str, exec_role: str) -> bool:
+    """
+    Returns True if a submission already exists for this
+    (student_email + exec_role), otherwise False.
+    """
+    rows = find_in_DB(student_email)
+
+    target_role = normalize(exec_role)
+
+    for row in rows:
+        row_role = normalize(row.get("Exec_Role", ""))
+
+        if row_role == target_role:
+            return True
+
+    return False
+
 
 def add_points(student_email, points_to_add):
     rows = find_in_DB(student_email)
@@ -118,15 +167,21 @@ def sheetdb_update_points(student_email, new_points):
     r = requests.patch(url, json=payload, timeout=10)
     r.raise_for_status()
 
-
-
 #appaned the row to sheet db
 def sheetdb_append(row: dict):
     payload = {"data": [row]}
-    
     r = requests.post(SHEETDB_URL, json=payload, timeout=10)
     r.raise_for_status()
     return r.json()
+
+#normalize string text
+def normalize(text: str) -> str:
+    t = text.strip().lower()
+    # normalize comma spacing: "a, b", "a ,b", "a,b" -> "a, b"
+    t = re.sub(r"\s*,\s*", ", ", t)
+    # collapse any remaining whitespace
+    t = " ".join(t.split())
+    return t
 
 #allow bot to access intents
 intents = discord.Intents.default()
