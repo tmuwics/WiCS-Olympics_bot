@@ -7,6 +7,8 @@ import requests
 from config import SHEETDB_URL
 
 
+
+
 #check if there is a record in sheets
 def find_in_DB(key: str):
     encoded_key = quote(key, safe="")
@@ -40,24 +42,24 @@ def submission_exists(student_email: str, exec_role: str) -> bool:
 
     return False
 
-def update_db(student_email, points_to_add, exec_role, new_loc, new_ig):
+def update_db(student_email, points_to_add, exec_role, new_loc, new_ig, new_image_url):
     rows = find_in_DB(student_email)
     current_points = int(rows[0].get("Points", 0))
     new_total = current_points + points_to_add
-    sheetdb_update_user(student_email, new_total, exec_role, new_loc, new_ig)
+    sheetdb_update_user(student_email, new_total, exec_role, new_loc, new_ig, new_image_url)
     return new_total, False  
 
-async def update_db_async(student_email, points_to_add, exec_role, new_loc, new_ig):
-    return await asyncio.to_thread(update_db, student_email, points_to_add, exec_role, new_loc, new_ig)
+async def update_db_async(student_email, points_to_add, exec_role, new_loc, new_ig, new_image_url):
+    return await asyncio.to_thread(update_db, student_email, points_to_add, exec_role, new_loc, new_ig, new_image_url)
 
-
-def sheetdb_update_user(student_email, new_points, new_role, new_loc, new_ig):
+def sheetdb_update_user(student_email, new_points, new_role, new_loc, new_ig, image_url):
     encoded_email = quote(student_email, safe="")
     url = f"{SHEETDB_URL}/Student_Email/{encoded_email}"
 
     rows = find_in_DB(student_email)
     existing_roles = rows[0].get("Exec_Role", "")
     existing_location = rows[0].get("Location", "")
+    existing_url = rows[0].get("Image_URL", "")
 
     # avoid duplicate role entries
     roles = [r.strip() for r in existing_roles.split(" - ") if r.strip()]
@@ -68,11 +70,16 @@ def sheetdb_update_user(student_email, new_points, new_role, new_loc, new_ig):
     if new_loc not in locations:
         locations.append(new_loc)
 
+    image_urls = [r.strip() for r in existing_url.split(" \n ") if r.strip()]
+    if image_url and image_url not in image_urls:
+        image_urls.append(image_url)
+
     payload = {
         "Location": " - ".join(locations),
         "Points": new_points,
         "Exec_Role": " - ".join(roles),
         "Instagram": new_ig,
+        "Image_URL": " \n ".join(image_urls),
         "last_updated": datetime.now(timezone.utc).isoformat()
     }
 

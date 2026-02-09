@@ -20,12 +20,17 @@ class Client(commands.Bot):
         #stopping the bot from responding to itself
         if message.author == self.user:
             return
+        
+        if message.attachments:
+            attachment_url = message.attachments[0].url
+
 
         if message.content.strip() == '#ExecFound':
             await message.channel.send(f'Hi there {message.author} please reply with your info: \n'
                                        'Note: Please send the photo in a separate message below, thank you <3', 
-                                       view=views.View())
+                                       view=views.View(attachment_url if message.attachments else None))
         await self.process_commands(message)
+
 
         for attachment in message.attachments:
             print("Filename:", attachment.filename)

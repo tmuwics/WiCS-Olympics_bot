@@ -6,12 +6,23 @@ from config import POINTS_PER_IG_POST, POINTS_PER_SUBMIT
 #creating a button
 class View(discord.ui.View):
 
+    image_url = ""
+
+    def __init__(self, url: str = None):
+        super().__init__(timeout=None)  # No timeout for the view
+        self.image_url = url
+
     @discord.ui.button(label="Enter info here!", style=discord.ButtonStyle.blurple)
     async def button_callback(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await interaction.response.send_modal(InfoModal())
-
+        await interaction.response.send_modal(InfoModal(image_url=self.image_url))
 #creating the modal for the form
 class InfoModal(discord.ui.Modal, title="WiCS Info Form"):
+
+    image_url: str = ""
+
+    def __init__(self, image_url: str = None):
+        super().__init__()
+        self.image_url = image_url
 
     #variables for the form
     name = discord.ui.TextInput(
@@ -45,6 +56,7 @@ class InfoModal(discord.ui.Modal, title="WiCS Info Form"):
         email = self.student_email.value
         exec_role = self.exec_role.value
         location = self.location.value
+        image_url = self.image_url
         points = POINTS_PER_SUBMIT  # base points for submission
 
         try:
@@ -63,7 +75,7 @@ class InfoModal(discord.ui.Modal, title="WiCS Info Form"):
                 if self.Instagram.value.strip():
                     points = points + POINTS_PER_IG_POST
 
-                await update_db_async(email, points, exec_role, location, self.Instagram.value)
+                await update_db_async(email, points, exec_role, location, self.Instagram.value, image_url)
 
             else:
                                 #check if they posted on IG and update points accordingly
@@ -77,6 +89,7 @@ class InfoModal(discord.ui.Modal, title="WiCS Info Form"):
                     "Instagram": self.Instagram.value,
                     "Exec_Role": exec_role,
                     "Points": points,
+                    "Image_URL": image_url,
                     "last_updated": datetime.now(timezone.utc).isoformat()
                 })
 
@@ -95,3 +108,4 @@ class InfoModal(discord.ui.Modal, title="WiCS Info Form"):
                 f"🚫 Something went wrong while saving.\n`{e}`",
                 ephemeral=True
             )
+            print(e)    
