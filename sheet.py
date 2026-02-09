@@ -40,18 +40,18 @@ def submission_exists(student_email: str, exec_role: str) -> bool:
 
     return False
 
-def update_db(student_email, points_to_add, exec_role, new_loc):
+def update_db(student_email, points_to_add, exec_role, new_loc, new_ig):
     rows = find_in_DB(student_email)
     current_points = int(rows[0].get("Points", 0))
     new_total = current_points + points_to_add
-    sheetdb_update_user(student_email, new_total, exec_role, new_loc)
+    sheetdb_update_user(student_email, new_total, exec_role, new_loc, new_ig)
     return new_total, False  
 
-async def update_db_async(student_email, points_to_add, exec_role, new_loc):
-    return await asyncio.to_thread(update_db, student_email, points_to_add, exec_role, new_loc)
+async def update_db_async(student_email, points_to_add, exec_role, new_loc, new_ig):
+    return await asyncio.to_thread(update_db, student_email, points_to_add, exec_role, new_loc, new_ig)
 
 
-def sheetdb_update_user(student_email, new_points, new_role, new_loc):
+def sheetdb_update_user(student_email, new_points, new_role, new_loc, new_ig):
     encoded_email = quote(student_email, safe="")
     url = f"{SHEETDB_URL}/Student_Email/{encoded_email}"
 
@@ -72,6 +72,7 @@ def sheetdb_update_user(student_email, new_points, new_role, new_loc):
         "Location": " - ".join(locations),
         "Points": new_points,
         "Exec_Role": " - ".join(roles),
+        "Instagram": new_ig,
         "last_updated": datetime.now(timezone.utc).isoformat()
     }
 

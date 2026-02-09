@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 import discord 
 from discord.ext import commands
 from sheet import *
+from config import POINTS_PER_IG_POST, POINTS_PER_SUBMIT
 #creating a button
 class View(discord.ui.View):
 
@@ -41,14 +42,15 @@ class InfoModal(discord.ui.Modal, title="WiCS Info Form"):
     async def on_submit(self, interaction: discord.Interaction):
         await interaction.response.defer(ephemeral=True)
 
-        points = 10
         email = self.student_email.value
         exec_role = self.exec_role.value
         location = self.location.value
+        points = POINTS_PER_SUBMIT  # base points for submission
 
         try:
             rows = await find_in_DB_async(email)
 
+            #if the person already has a record in the database, update it,  otherwise, create a new one.
             if len(rows) > 0:
                 if submission_exists(email, exec_role):
                     await interaction.followup.send(
@@ -56,10 +58,18 @@ class InfoModal(discord.ui.Modal, title="WiCS Info Form"):
                         ephemeral=True
                     )
                     return
+                
+                #check if they posted on IG and update points accordingly
+                if self.Instagram.value.strip():
+                    points = points + POINTS_PER_IG_POST
 
-                await update_db_async(email, points, exec_role, location)
+                await update_db_async(email, points, exec_role, location, self.Instagram.value)
 
             else:
+                                #check if they posted on IG and update points accordingly
+                if self.Instagram.value.strip():
+                    points = points + POINTS_PER_IG_POST
+
                 await sheetdb_append_async({
                     "Name": self.name.value,
                     "Student_Email": email,
@@ -75,7 +85,7 @@ class InfoModal(discord.ui.Modal, title="WiCS Info Form"):
                 f"**Name:** {self.name.value}\n"
                 f"**Student Email:** {self.student_email.value}\n"
                 f"**Location:** {self.location.value}\n"
-                f"**Points:** {points}",
+                f"**Points:** {POINTS_PER_SUBMIT}",
                 ephemeral=True
             )
 
