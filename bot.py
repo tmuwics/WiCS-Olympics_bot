@@ -29,9 +29,8 @@ class Client(commands.Bot):
         if message.attachments:
             attachment_url = message.attachments[0].url
 
-        if message.content.strip().lower() == TAG.lower():
-            await message.channel.send(f'Hi there {message.author} please reply with your info: \n'
-                                       'Note: Please send the photo in a separate message below, thank you <3', 
+        if TAG.lower() in message.content.strip().lower():
+            await message.channel.send(f'Hi there {message.author} please reply with your info: ', 
                                        view=views.View(attachment_url if message.attachments else None))
         await self.process_commands(message)
 
