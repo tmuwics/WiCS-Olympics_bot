@@ -6,9 +6,6 @@ from datetime import datetime, timezone
 import requests
 from config import SHEETDB_URL
 
-
-
-
 #check if there is a record in sheets
 def find_in_DB(key: str):
     encoded_key = quote(key, safe="")

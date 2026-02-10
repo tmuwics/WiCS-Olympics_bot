@@ -1,6 +1,7 @@
 import discord 
 from discord.ext import commands
 import views
+from config import ALLOWED_CHANNEL_ID, TAG
 
 class Client(commands.Bot):
 
@@ -21,11 +22,14 @@ class Client(commands.Bot):
         if message.author == self.user:
             return
         
+        if message.channel.id != ALLOWED_CHANNEL_ID:
+            print(f"message.channel.id = {message.channel.id}, ALLOWED_CHANNEL_ID = {ALLOWED_CHANNEL_ID}")
+            return
+        
         if message.attachments:
             attachment_url = message.attachments[0].url
 
-
-        if message.content.strip() == '#ExecFound':
+        if message.content.strip().lower() == TAG.lower():
             await message.channel.send(f'Hi there {message.author} please reply with your info: \n'
                                        'Note: Please send the photo in a separate message below, thank you <3', 
                                        view=views.View(attachment_url if message.attachments else None))
